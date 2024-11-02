@@ -7,7 +7,7 @@ import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import java.sql.Timestamp
 import java.util.UUID
 
-object Application {
+object Sessionization {
   private val SESSION_EXPIRED_TIME: Long = 30 * 60 * 1000L
   private val SCHEMA: StructType = StructType(
     Seq(
