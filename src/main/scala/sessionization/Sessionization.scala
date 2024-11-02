@@ -2,25 +2,14 @@ package sessionization
 
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
+import org.apache.spark.sql.{Dataset, Encoders, Row, SparkSession}
 
 import java.sql.Timestamp
 import java.util.UUID
 
 object Sessionization {
+
   private val SESSION_EXPIRED_TIME: Long = 30 * 60 * 1000L
-  private val SCHEMA: StructType = StructType(
-    Seq(
-      StructField("event_time", StringType),
-      StructField("event_type", StringType),
-      StructField("product_id", LongType),
-      StructField("category_id", LongType),
-      StructField("category_code", StringType),
-      StructField("brand", StringType),
-      StructField("price", DoubleType),
-      StructField("user_id", LongType)
-    )
-  )
   private val session = SparkSession
     .builder()
     .appName("Sessionization")
@@ -32,7 +21,7 @@ object Sessionization {
   def main(args: Array[String]): Unit = {
     val df = session.read
       .option("header", value = true)
-      .schema(SCHEMA)
+      .schema(Encoders.product[BehaviorSchema].schema)
       .csv("../samples/2019-Oct.csv")
       .withColumn(
         "event_time",
