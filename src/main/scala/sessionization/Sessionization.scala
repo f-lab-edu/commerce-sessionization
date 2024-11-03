@@ -9,7 +9,12 @@ import java.util.UUID
 
 object Sessionization {
 
+  // e.g. 2019-10-01
+  private val PROCESS_DATE = sys.env("date")
+  // e.g. 00
+  private val PROCESS_HOUR = sys.env("hour")
   private val SESSION_EXPIRED_TIME: Long = 30 * 60 * 1000L
+
   private val session = SparkSession
     .builder()
     .appName("Sessionization")
@@ -22,7 +27,8 @@ object Sessionization {
     val df = session.read
       .option("header", value = true)
       .schema(Encoders.product[BehaviorSchema].schema)
-      .csv("../samples/2019-Oct.csv")
+      .parquet("../behaviors")
+      .filter($"date_hour" === f"${PROCESS_DATE}T${PROCESS_HOUR}Z")
       .withColumn(
         "event_time",
         to_timestamp($"event_time", "yyyy-MM-dd HH:mm:ss 'UTC'")
