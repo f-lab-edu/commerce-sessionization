@@ -4,15 +4,13 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Dataset, Encoders, Row, SparkSession}
 
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.sql.Timestamp
 import java.util.UUID
 
 object Sessionization {
 
-  // e.g. 2019-10-01
-  private val PROCESS_DATE = sys.env("date")
-  // e.g. 00
-  private val PROCESS_HOUR = sys.env("hour")
   private val SESSION_EXPIRED_TIME: Long = 30 * 60 * 1000L
 
   private val session = SparkSession
@@ -24,6 +22,11 @@ object Sessionization {
   import session.implicits._
 
   def main(args: Array[String]): Unit = {
+    // e.g. 2019-10-01
+    val PROCESS_DATE = sys.env("date")
+    // e.g. 00
+    val PROCESS_HOUR = sys.env("hour")
+
     val df = session.read
       .option("header", value = true)
       .schema(Encoders.product[BehaviorSchema].schema)
@@ -51,9 +54,9 @@ object Sessionization {
     )
 
     // UDF: 세션화 로직을 수행하여 세션 ID(uuid)를 할당
-    val assignSessionId = udf((event_times: Seq[Timestamp]) => {
-      val headSessionIds = Seq[String](UUID.randomUUID().toString)
+    val assignSessionId = udf((userId: String, event_times: Seq[Timestamp]) => {
       val headTime = event_times.head
+      val headSessionIds = Seq[String](generateSessionId(userId, headTime))
 
       // 각 이벤트 시간에 대해 sessionId 할당, SESSION_EXPIRED_TIME 초과 시 새로운 sessionId 생성
       event_times.tail
@@ -61,7 +64,7 @@ object Sessionization {
           case ((sessionIds, prevTime), currentTime) =>
             val sessionId =
               if (currentTime.getTime - prevTime.getTime > SESSION_EXPIRED_TIME)
-                UUID.randomUUID().toString
+                generateSessionId(userId, currentTime)
               else
                 sessionIds.last
             (sessionIds :+ sessionId, currentTime)
@@ -77,7 +80,7 @@ object Sessionization {
     df.groupBy("user_id")
       .agg(array_sort(collect_list(events)).as("events"))
       .withColumn("event_times", $"events.event_time")
-      .withColumn("session_ids", assignSessionId($"event_times"))
+      .withColumn("session_ids", assignSessionId($"user_id", $"event_times"))
       .withColumn(
         "events_with_session",
         zip_with(
@@ -101,6 +104,18 @@ object Sessionization {
         explode($"events_with_session").as("event_with_session")
       )
       .select($"user_id", $"event_with_session.*")
+  }
+
+  // $userId-${eventTime.getTime}으로 SHA-256 hash => sessionId 생성
+  private def generateSessionId(
+      userId: String,
+      eventTime: Timestamp
+  ): String = {
+    val input = s"$userId-${eventTime.getTime}"
+    val md = MessageDigest.getInstance("SHA-256")
+    md.digest(input.getBytes(StandardCharsets.UTF_8))
+      .map("%02x".format(_))
+      .mkString
   }
 
 }
