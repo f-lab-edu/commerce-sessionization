@@ -1,13 +1,11 @@
 package sessionization
 
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Dataset, Encoders, Row, SparkSession}
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Timestamp
-import java.util.UUID
 
 object Sessionization {
 
@@ -28,7 +26,6 @@ object Sessionization {
     val PROCESS_HOUR = sys.env("hour")
 
     val df = session.read
-      .option("header", value = true)
       .schema(Encoders.product[BehaviorSchema].schema)
       .parquet("../behaviors")
       .filter($"date_hour" === f"${PROCESS_DATE}T${PROCESS_HOUR}Z")
