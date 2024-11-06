@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Timestamp
 
-object Sessionization {
+object SessionizationUdf {
 
   private val SESSION_EXPIRED_TIME: Long = 30 * 60 * 1000L
 
