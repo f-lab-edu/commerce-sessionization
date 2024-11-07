@@ -13,6 +13,7 @@ object SessionizationBuiltIn {
     .builder()
     .appName("SessionizationBuiltIn")
     .master("local[*]")
+    .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
     .getOrCreate()
 
   import session.implicits._
@@ -32,7 +33,13 @@ object SessionizationBuiltIn {
         to_timestamp($"event_time", "yyyy-MM-dd HH:mm:ss 'UTC'")
       )
 
-    augmentSessionId(df)
+    val sessionDf = augmentSessionId(df)
+
+    sessionDf.write
+      .partitionBy("date_hour")
+      .mode("overwrite")
+      .format("parquet")
+      .save("../sessions")
 
     session.stop()
   }
