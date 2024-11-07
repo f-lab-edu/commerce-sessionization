@@ -39,10 +39,10 @@ object SessionizationBuiltIn {
       .parquet("../sessions")
       .filter($"date_hour" === getPrevProcessTime(processTime))
 
-    val PrevSessionUnion = loadPrevActiveSessions(prevSessionData, processTime)
+    val unionData = loadPrevActiveSessions(prevSessionData, processTime)
       .unionByName(behaviorData, allowMissingColumns = true)
 
-    val sessionDf = augmentSessionId(behaviorData)
+    val sessionDf = augmentSessionId(unionData, processTime)
 
     sessionDf.write
       .partitionBy("date_hour")
@@ -53,12 +53,15 @@ object SessionizationBuiltIn {
     session.stop()
   }
 
-  def augmentSessionId(dataset: Dataset[Row]): Dataset[Row] = {
+  def augmentSessionId(
+      dataset: Dataset[Row],
+      processTime: String
+  ): Dataset[Row] = {
     val windowSpec = Window.partitionBy("user_id").orderBy("event_timestamp")
     val eventTimeDiff = unix_timestamp($"event_timestamp") - unix_timestamp(
       lag($"event_timestamp", 1).over(windowSpec)
     )
-    val sessionIdentify =
+    val assignSessionId =
       sha2(concat_ws("-", $"user_id", $"event_timestamp"), SHA_256)
 
     // 1. lag 통해 time_diff 컬럼에 현재 event_timestamp, 이전 event_timestamp 차이를 저장
@@ -75,22 +78,26 @@ object SessionizationBuiltIn {
           .otherwise($"time_diff")
       )
 
-    // 1. 첫 시작 혹은 SESSION_EXPIRED_TIME 초과 ("time_diff".isNull) 일 때, sha2 통해 session_id 를 생성
-    // 2. 나머지의 경우 NULL 저장한 후, last window 통하여 이전의 session_id를 연속되게 부여
-    val dfWithSessionId = dfWithTimeDiff
+    // 이전 Active Session 일 때 session_id 그대로
+    // 세션의 첫 시작 혹은 SESSION_EXPIRED_TIME 초과일 때 sha256 통해 assignSessionId
+    // 나머지는 NULL 저장 이후 last window 통하여 이전의 session_id 부여
+    // 시간 기준 정렬 이후 반환
+    dfWithTimeDiff
       .withColumn(
         "session_id",
-        when($"time_diff".isNull, sessionIdentify).otherwise(null)
+        when($"session_id".isNotNull, $"session_id")
+          .when($"time_diff".isNull, assignSessionId)
+          .otherwise(null)
       )
       .withColumn(
         "session_id",
         last("session_id", ignoreNulls = true)
           .over(windowSpec.rowsBetween(Window.unboundedPreceding, 0))
       )
+      .filter($"date_hour" === processTime)
+      .sort("event_timestamp")
       .drop("event_timestamp")
       .drop("time_diff")
-
-    dfWithSessionId
   }
 
   // 1. processTime 이전 30분 이내 행만 필터링
