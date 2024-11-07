@@ -28,10 +28,6 @@ object SessionizationBuiltIn {
       .schema(Encoders.product[BehaviorSchema].schema)
       .parquet("../behaviors")
       .filter($"date_hour" === f"${PROCESS_DATE}T${PROCESS_HOUR}Z")
-      .withColumn(
-        "event_time",
-        to_timestamp($"event_time", "yyyy-MM-dd HH:mm:ss 'UTC'")
-      )
 
     val sessionDf = augmentSessionId(df)
 
@@ -45,16 +41,20 @@ object SessionizationBuiltIn {
   }
 
   def augmentSessionId(dataset: Dataset[Row]): Dataset[Row] = {
-    val windowSpec = Window.partitionBy("user_id").orderBy("event_time")
-    val eventTimeDiff = unix_timestamp($"event_time") - unix_timestamp(
-      lag($"event_time", 1).over(windowSpec)
+    val windowSpec = Window.partitionBy("user_id").orderBy("event_timestamp")
+    val eventTimeDiff = unix_timestamp($"event_timestamp") - unix_timestamp(
+      lag($"event_timestamp", 1).over(windowSpec)
     )
     val sessionIdentify =
-      sha2(concat_ws("-", $"user_id", $"event_time"), SHA_256)
+      sha2(concat_ws("-", $"user_id", $"event_timestamp"), SHA_256)
 
-    // 1. lag 통해 time_diff 컬럼에 현재 event_time, 이전 event_time 차이를 저장
-    // 2. time_diff 가 SESSION_EXPIRED_TIME 초과시 NULL, 첫 시작 event_time 또한 NULL 로 저장
+    // 1. lag 통해 time_diff 컬럼에 현재 event_timestamp, 이전 event_timestamp 차이를 저장
+    // 2. time_diff 가 SESSION_EXPIRED_TIME 초과시 NULL, 첫 시작 event_timestamp 또한 NULL 로 저장
     val dfWithTimeDiff = dataset
+      .withColumn(
+        "event_timestamp",
+        to_timestamp($"event_time", "yyyy-MM-dd HH:mm:ss 'UTC'")
+      )
       .withColumn("time_diff", eventTimeDiff)
       .withColumn(
         "time_diff",
@@ -74,6 +74,7 @@ object SessionizationBuiltIn {
         last("session_id", ignoreNulls = true)
           .over(windowSpec.rowsBetween(Window.unboundedPreceding, 0))
       )
+      .drop("event_timestamp")
       .drop("time_diff")
 
     dfWithSessionId
