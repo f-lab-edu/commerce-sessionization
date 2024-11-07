@@ -1,13 +1,17 @@
 package sessionization
 
+import org.apache.spark.sql._
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{Dataset, Encoders, Row, SparkSession}
+
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 object SessionizationBuiltIn {
 
   private val SESSION_EXPIRED_TIME: Int = 30 * 60
   private val SHA_256 = 256
+  private val DATE_HOUR_FORMAT = "yyyy-MM-dd'T'HH'Z'"
 
   private val session: SparkSession = SparkSession
     .builder()
@@ -23,13 +27,22 @@ object SessionizationBuiltIn {
     val PROCESS_DATE = sys.env("date")
     // e.g. 00
     val PROCESS_HOUR = sys.env("hour")
+    val processTime = s"${PROCESS_DATE}T${PROCESS_HOUR}Z"
 
-    val df = session.read
+    val behaviorData = session.read
       .schema(Encoders.product[BehaviorSchema].schema)
       .parquet("../behaviors")
-      .filter($"date_hour" === f"${PROCESS_DATE}T${PROCESS_HOUR}Z")
+      .filter($"date_hour" === processTime)
 
-    val sessionDf = augmentSessionId(df)
+    val prevSessionData = session.read
+      .schema(Encoders.product[SessionSchema].schema)
+      .parquet("../sessions")
+      .filter($"date_hour" === getPrevProcessTime(processTime))
+
+    val PrevSessionUnion = loadPrevActiveSessions(prevSessionData, processTime)
+      .unionByName(behaviorData, allowMissingColumns = true)
+
+    val sessionDf = augmentSessionId(behaviorData)
 
     sessionDf.write
       .partitionBy("date_hour")
@@ -78,6 +91,44 @@ object SessionizationBuiltIn {
       .drop("time_diff")
 
     dfWithSessionId
+  }
+
+  // 1. processTime 이전 30분 이내 행만 필터링
+  // 2. session_id 기준 파티션과 event_timestamp 내림차순으로 row_number() 사용하여 가장 최근 세션 선택
+  def loadPrevActiveSessions(
+      dataset: Dataset[Row],
+      processTime: String
+  ): Dataset[Row] = {
+    val windowSpec =
+      Window.partitionBy("session_id").orderBy(desc("event_timestamp"))
+
+    dataset
+      .withColumn(
+        "event_timestamp",
+        to_timestamp($"event_time", "yyyy-MM-dd HH:mm:ss 'UTC'")
+      )
+      .filter(before30Minutes(processTime) <= $"event_timestamp")
+      .withColumn("rank", row_number().over(windowSpec))
+      .filter($"rank" === 1)
+      .drop("rank")
+      .drop("event_timestamp")
+  }
+
+  private def getPrevProcessTime(processTime: String): String = {
+    val prevProcessTime = LocalDateTime
+      .parse(
+        processTime,
+        DateTimeFormatter.ofPattern(DATE_HOUR_FORMAT)
+      )
+      .minusHours(1L)
+
+    prevProcessTime.format(DateTimeFormatter.ofPattern(DATE_HOUR_FORMAT))
+  }
+
+  private def before30Minutes(processTime: String): Column = {
+    val processTimestamp = to_timestamp(lit(processTime), DATE_HOUR_FORMAT)
+
+    processTimestamp.cast("timestamp") - expr("INTERVAL 30 MINUTE")
   }
 
 }
