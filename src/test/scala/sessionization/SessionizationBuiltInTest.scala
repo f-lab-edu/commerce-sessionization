@@ -3,11 +3,11 @@ package sessionization
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.{col, to_timestamp}
 import org.scalatest.flatspec.AnyFlatSpec
-import sessionization.SessionizationUdf.augmentSessionId
+import sessionization.SessionizationBuiltIn.augmentSessionId
 
 import java.sql.Timestamp
 
-class SessionizationUdfTest extends AnyFlatSpec {
+class SessionizationBuiltInTest extends AnyFlatSpec {
 
   val spark: SparkSession = SparkSession
     .builder()

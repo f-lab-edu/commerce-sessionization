@@ -7,6 +7,10 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Timestamp
 
+/** 참고: 이 객체는 더 이상 사용되지 않으며, 향후 제거되거나 교체될 수 있습니다.
+  * [https://github.com/f-lab-edu/commerce-sessionization/issues/3] 페이지 참고
+  */
+@deprecated
 object SessionizationUdf {
 
   private val SESSION_EXPIRED_TIME: Long = 30 * 60 * 1000L
