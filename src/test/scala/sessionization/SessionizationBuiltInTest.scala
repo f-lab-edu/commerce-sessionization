@@ -99,10 +99,8 @@ class SessionizationBuiltInTest extends AnyFlatSpec {
     ).toDF()
       .withColumn("date_hour", lit(processTime))
 
-    val value = augmentSessionId(data, processTime)
-    value.show(false)
     // when
-    val result = value.collect()
+    val result = augmentSessionId(data, processTime).collect()
 
     // then
     assert(result(0).getString(8) == result(2).getString(8))
