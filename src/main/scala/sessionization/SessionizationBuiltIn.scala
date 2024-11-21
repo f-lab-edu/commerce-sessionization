@@ -16,7 +16,7 @@ object SessionizationBuiltIn {
   private val session: SparkSession = SparkSession
     .builder()
     .appName("SessionizationBuiltIn")
-    .master("local[*]")
+    .master("yarn")
     .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
     .getOrCreate()
 
@@ -24,19 +24,19 @@ object SessionizationBuiltIn {
 
   def main(args: Array[String]): Unit = {
     // e.g. 2019-10-01
-    val PROCESS_DATE = sys.env("date")
+    val processDate = args(0)
     // e.g. 00
-    val PROCESS_HOUR = sys.env("hour")
-    val processTime = s"${PROCESS_DATE}T${PROCESS_HOUR}Z"
+    val processHour = args(1)
+    val processTime = s"${processDate}T${processHour}Z"
 
     val behaviorData = session.read
       .schema(Encoders.product[BehaviorSchema].schema)
-      .parquet("../behaviors")
+      .parquet("gs://daeuk/behaviors/logs")
       .filter($"date_hour" === processTime)
 
     val prevSessionData = session.read
       .schema(Encoders.product[SessionSchema].schema)
-      .parquet("../sessions")
+      .parquet("gs://daeuk/behaviors/sessions")
       .filter($"date_hour" === getPrevProcessTime(processTime))
 
     val unionData = loadPrevActiveSessions(prevSessionData, processTime)
@@ -48,7 +48,7 @@ object SessionizationBuiltIn {
       .partitionBy("date_hour")
       .mode("overwrite")
       .format("parquet")
-      .save("../sessions")
+      .save("gs://daeuk/behaviors/sessions")
 
     session.stop()
   }

@@ -1,28 +1,26 @@
 package sessionization
 
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Encoders, SparkSession}
-import org.apache.spark.sql.functions.{date_format, to_timestamp}
 
 object DailyFileDivider {
 
-  // e.g. 2019-Oct
-  private val YEAR_MONTH = sys.env("date")
-  private val INPUT_CSV = f"../samples/$YEAR_MONTH.csv"
-
-  private val session = SparkSession
-    .builder()
-    .appName("Sessionization")
-    .master("local[*]")
-    .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
-    .getOrCreate()
+  private val session =
+    SparkSession
+      .builder()
+      .appName("Sessionization")
+      .master("yarn")
+      .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
+      .getOrCreate()
 
   import session.implicits._
 
   def main(args: Array[String]): Unit = {
+    val yearMonth = args(0)
     val df = session.read
       .option("header", value = true)
       .schema(Encoders.product[BehaviorSchema].schema)
-      .csv(INPUT_CSV)
+      .csv(s"gs://daeuk/behaviors/raws/$yearMonth.csv")
 
     val hourlyDf = df.withColumn(
       "date_hour",
@@ -38,7 +36,7 @@ object DailyFileDivider {
       .partitionBy("date_hour")
       .mode("overwrite")
       .format("parquet")
-      .save("../behaviors")
+      .save("gs://daeuk/behaviors/logs")
 
     session.stop()
   }
