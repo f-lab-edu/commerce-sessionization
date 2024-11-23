@@ -1,8 +1,7 @@
-from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
-from airflow.utils.dates import days_ago
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from airflow import DAG
+from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
 
 default_args = {
     'owner': 'airflow',
@@ -10,6 +9,7 @@ default_args = {
     'email_on_retry': False,
     'retries': 3,
     'retry_delay': timedelta(minutes=1),
+    'depends_on_past': True
 }
 
 SPARK_JOB = {
@@ -32,9 +32,10 @@ with DAG(
         "sessionization",
         default_args=default_args,
         description="Sessionization",
-        schedule_interval="@hourly",
-        start_date=days_ago(1),
-        catchup=False,
+        schedule_interval="10 * * * *",
+        start_date=datetime(2024, 11, 20, 00),
+        catchup=True,
+        max_active_runs=1
 ) as dag:
     submit_spark_job = DataprocSubmitJobOperator(
         task_id="sessionization",
