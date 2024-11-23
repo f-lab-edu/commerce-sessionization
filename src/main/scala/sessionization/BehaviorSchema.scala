@@ -9,5 +9,6 @@ case class BehaviorSchema(
     brand: String,
     price: Double,
     user_id: Long,
-    date_hour: String
+    event_date: String,
+    event_hour: String
 )

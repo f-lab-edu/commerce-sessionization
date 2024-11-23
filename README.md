@@ -27,13 +27,6 @@ val hourlyDf = df
       "yyyy-MM-dd HH:mm:ss 'UTC'"
     )
   )
-  .withColumn(
-    "date_hour",
-    date_format(
-      to_timestamp($"event_time", "yyyy-MM-dd HH:mm:ss 'UTC'"),
-      "yyyy-MM-dd'T'HH'Z'"
-    )
-  )
 ```
 
 ### Jar Compile

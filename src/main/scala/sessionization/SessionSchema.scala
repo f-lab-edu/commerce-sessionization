@@ -10,5 +10,6 @@ case class SessionSchema(
     price: Double,
     user_id: Long,
     session_id: String,
-    date_hour: String
+    event_date: String,
+    event_hour: String
 )
