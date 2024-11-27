@@ -1,7 +1,7 @@
+from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
 from datetime import timedelta, datetime
 
 from airflow import DAG
-from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
 
 default_args = {
     'owner': 'airflow',
@@ -32,7 +32,7 @@ with DAG(
         "sessionization",
         default_args=default_args,
         description="Sessionization",
-        schedule_interval="10 * * * *",
+        schedule="10 * * * *",
         start_date=datetime(2024, 11, 20, 00),
         catchup=True,
         max_active_runs=1
