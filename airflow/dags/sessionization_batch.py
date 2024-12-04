@@ -1,7 +1,7 @@
-from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
 from datetime import timedelta, datetime
 
 from airflow import DAG
+from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
 
 default_args = {
     'owner': 'airflow',
@@ -19,8 +19,9 @@ SPARK_JOB = {
         "main_class": "sessionization.SessionizationBuiltIn",
         "jar_file_uris": ["gs://daeuk/jars/SessionizationBuiltIn.jar"],
         "args": [
-            "{{ ds }}",
-            "{{ logical_date.strftime('%H') }}"
+            "{{ ds }}",  # eventDate
+            "{{ logical_date.strftime('%H') }}",  # eventHour
+            "gs://daeuk/behaviors"  # behaviorsPath
         ],
         "properties": {
             "spark.sql.sources.partitionOverwriteMode": "dynamic"
