@@ -23,11 +23,16 @@ object SessionizationBuiltIn {
 
   import session.implicits._
 
+  /* args
+  1. eventDate e.g. 2019-10-01
+  2. eventHour e.g. 00
+  3. behaviorsPath e.g. gs://daeuk/behaviors
+   */
   def main(args: Array[String]): Unit = {
     // e.g. 2019-10-01
     val eventDate = args(0)
-    // e.g. 00
     val eventHour = args(1)
+    val behaviorsPath = args(2)
     val eventDateTime = LocalDateTime.parse(
       s"$eventDate $eventHour",
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH")
@@ -35,12 +40,12 @@ object SessionizationBuiltIn {
 
     val behaviorData = session.read
       .schema(Encoders.product[BehaviorSchema].schema)
-      .parquet("gs://daeuk/behaviors/logs")
+      .parquet(s"$behaviorsPath/logs")
       .filter($"event_date" === eventDate && $"event_hour" === eventHour)
 
     val prevSessionData = session.read
       .schema(Encoders.product[SessionSchema].schema)
-      .parquet("gs://daeuk/behaviors/sessions")
+      .parquet(s"$behaviorsPath/sessions")
       .filter(
         $"event_date" === eventDateTime.minusHours(1L).format(DATE_FORMAT)
           && $"event_hour" === eventDateTime.minusHours(1L).format(HOUR_FORMAT)
@@ -51,13 +56,11 @@ object SessionizationBuiltIn {
 
     val sessionDf = augmentSessionId(unionData, eventDateTime)
 
-    sessionDf.show(false)
-
     sessionDf.write
       .partitionBy("event_date", "event_hour")
       .mode("overwrite")
       .format("parquet")
-      .save("gs://daeuk/behaviors/sessions")
+      .save(s"$behaviorsPath/sessions")
 
     session.stop()
   }
